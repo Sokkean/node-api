@@ -35,6 +35,54 @@ class userModel {
         return result.rows;
     }
     
+    //Login user
+    static async loginUser(data) {
+        try {
+            const { email, password } = data;
+            const user = await userModel.findUserByEmail(email);
+            
+            // Check if the user exists
+            if (!user) {
+                return {
+                    status: "401",
+                    error: 'User not found'
+                };
+            }
+            
+            const validPassword = await bcrypt.compare(password, user.password);
+
+            if (!validPassword) {
+                return {
+                    status: "401",
+                    error: 'Invalid password'
+                };
+            }
+
+            // Import jwt at the top of the file
+            // import jwt from 'jsonwebtoken';
+            const jwt = await import('jsonwebtoken');
+            
+            const token = jwt.default.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+            
+            return {
+                status: "200",
+                data: {
+                    message: "Login successfully",
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    token: token,
+                }
+            };
+
+        } catch (err) {
+            return {
+                status: "500",
+                error: err.message
+            };
+        }
+    }
+    
 }
 
 export default userModel;
