@@ -30,7 +30,7 @@ class userModel {
 
     //get list users
     static async getListUser() {
-        const query = `SELECT * FROM users`;
+        const query = `SELECT id , name , email, gender FROM users`;
         const result = await pool.query(query);
         return result.rows;
     }
@@ -39,6 +39,7 @@ class userModel {
     static async loginUser(data) {
         try {
             const { email, password } = data;
+            
             const user = await userModel.findUserByEmail(email);
             
             // Check if the user exists
@@ -50,7 +51,7 @@ class userModel {
             }
             
             const validPassword = await bcrypt.compare(password, user.password);
-
+            
             if (!validPassword) {
                 return {
                     status: "401",
@@ -61,7 +62,7 @@ class userModel {
             // Import jwt at the top of the file
             // import jwt from 'jsonwebtoken';
             const jwt = await import('jsonwebtoken');
-            
+
             const token = jwt.default.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
             
             return {
@@ -72,6 +73,7 @@ class userModel {
                     email: user.email,
                     name: user.name,
                     token: token,
+                    token_type: "Bearer"	
                 }
             };
 
