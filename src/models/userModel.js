@@ -1,22 +1,49 @@
 import pool from "../db/db.js";
 import bcrypt from 'bcrypt';
+import mailer from '../service/mailer.js';
  
 
 class userModel { 
-
-    // store user data
     static async storeDataUser(data) {
         const { name, email, password } = data;
-    
-        // Hash the password
-        const saltRounds = 10; // Salt rounds for security
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-    
+
+        // 1. Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000);
+        
+        // 2. Send email
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'OTP Verification',
+            text: `Your OTP code is: ${otp}`
+        };
+        
+        try {
+            await mailer.sendMail(mailOptions);
+            
+        } catch (error) {
+        console.error('❌ Error sending OTP email:', error.message);
+        throw new Error('Failed to send OTP email');
+        }
+
+        // 3. Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // 4. Insert user
+        try {
         const query = `INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id`;
         const values = [name, email, hashedPassword];
-    
         const result = await pool.query(query, values);
-        return result.rows[0]["id"];	
+
+        // 5. Return user id + otp for next step
+        return {
+            userId: result.rows[0].id,
+            otp: otp // ❗ remove this in production
+        };
+        } catch (error) {
+        console.error('❌ DB Insert Error:', error.message);
+        throw new Error('Database insert failed');
+        }
     }
 
     //find user by email
@@ -26,6 +53,11 @@ class userModel {
 
         const result = await pool.query(query, values);
         return result.rows[0];
+    }
+    //generate otp
+    static async generateOTP() {
+        const otp = Math.floor(100000 + Math.random() * 900000);
+        return otp;
     }
 
     //get list users
@@ -83,6 +115,54 @@ class userModel {
                 error: err.message
             };
         }
+    }
+    //** Regiter User with OTP */
+    static async registerUserWithOTP(data) {
+        try {
+            const { name, email, phone, type } = data;
+
+            // ** Check Type Phone or Email */
+            if (type == "email") {
+                //** Check Email */
+                const exituser = await userModel.findUserByEmail(email);
+                if (exituser) {
+                    return {
+                        status: "400",
+                        error: "Email already exists"
+                    };
+                }
+
+                //** Generate OTP */
+                const otp = Math.floor(100000 + Math.random() * 900000);
+
+                const mailOptions = {
+                    from: process.env.EMAIL_USER,
+                    to: email,
+                    subject: 'OTP Verification',
+                    text: `Your OTP code is: ${otp}`
+                };
+                //** Send Otp */
+                try {
+                    await mailer.sendMail(mailOptions);
+                } catch (error) {
+                    console.error('❌ Error sending OTP email:', error.message);
+                    throw new Error('Failed to send OTP email');
+                }
+
+                //** Insert User */
+                const result = `INSERT INTO users (name, email) VALUES (?, ?) RETURNING id`;
+                const value = [name, email];
+                const resultInsert = await pool.query(result, value);
+
+                return resultInsert[0].id;
+            } 
+
+        }catch(error){
+            return  {
+                status: "500",
+                error: error.message
+            };
+        };
     }
     
 }
